@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -21,7 +22,7 @@ func collectCurrentToken(currentString []rune) (Token, error) {
 	s := string(currentString)
 	_, err := strconv.Atoi(s)
 	if err != nil {
-		return Token{}, err
+		return Token{}, errors.New("Invalid token: " + s)
 	}
 	return Token{NUMBER, s}, nil
 }
