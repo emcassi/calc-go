@@ -9,15 +9,15 @@ import (
 )
 
 const (
-	NUMBER   = 0
-	OPERATOR = 1
-	LEFT_PAREN = 2
+	NUMBER      = 0
+	OPERATOR    = 1
+	LEFT_PAREN  = 2
 	RIGHT_PAREN = 3
 )
 
 type Token struct {
-	kind      int
-	value     string
+	kind  int
+	value string
 }
 
 type Component struct {
@@ -91,7 +91,7 @@ func collectComponents(tokens []Token) ([]Token, error) {
 	for i := 0; i < len(tokens); i++ {
 		remaining := len(tokens) - i
 
-		if remaining < 0 { 
+		if remaining < 0 {
 			break
 		}
 
@@ -130,8 +130,10 @@ func collectComponents(tokens []Token) ([]Token, error) {
 
 				if operator == '*' {
 					rem_tokens = append(rem_tokens, Token{NUMBER, strconv.Itoa(prevNum * nextNum)})
+					tokens[i+1].value = strconv.Itoa(prevNum * nextNum)
 				} else {
 					rem_tokens = append(rem_tokens, Token{NUMBER, strconv.Itoa(prevNum / nextNum)})
+					tokens[i+1].value = strconv.Itoa(prevNum / nextNum)
 				}
 				i++
 
@@ -161,6 +163,10 @@ func evaluate(expression Expression) (int, error) {
 
 	running_total := -1
 
+	if len(expression) == 1 {
+		return strconv.Atoi(expression[0].value)
+	}
+
 	for i, token := range expression {
 		if token.kind == OPERATOR {
 			operator := rune(token.value[0])
@@ -174,7 +180,7 @@ func evaluate(expression Expression) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-		
+
 			if operator == '+' {
 				if running_total == -1 {
 					running_total = prev_num + next_num
@@ -199,7 +205,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Print("Enter expression: ")
-	input, err := reader.ReadString('\r')
+	input, err := reader.ReadString('\n')
 	tokens, err := lex(input)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
