@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 )
@@ -25,6 +26,12 @@ type Component struct {
 	operator rune
 }
 
+type Construct struct {
+	addition       bool
+	multiplication bool
+	exponentiation bool
+}
+
 type Expression []Token
 
 func collectCurrentToken(currentString []rune) (Token, error) {
@@ -36,28 +43,38 @@ func collectCurrentToken(currentString []rune) (Token, error) {
 	return Token{NUMBER, s}, nil
 }
 
-func lex(input string) ([]Token, error) {
+func lex(input string) ([]Token, Construct, error) {
 
 	var tokens []Token
 	currentString := []rune{}
+	construct := Construct{false, false, false}
 
 	for i := 0; i < len(input); i++ {
 		switch input[i] {
-		case '+', '-', '*', '/':
+		case '+', '-', '*', '/', '^':
 			if len(currentString) > 0 {
 				token, err := collectCurrentToken(currentString)
 				if err != nil {
-					return []Token{}, err
+					return []Token{}, Construct{}, err
 				}
 				tokens = append(tokens, token)
 			}
 			tokens = append(tokens, Token{OPERATOR, string(input[i])})
 			currentString = []rune{}
+
+			if input[i] == '+' || input[i] == '-' {
+				construct.addition = true
+			} else if input[i] == '*' || input[i] == '/' {
+				construct.multiplication = true
+			} else if input[i] == '^' {
+				construct.exponentiation = true
+			}
+
 		case ' ':
 			if len(currentString) > 0 {
 				token, err := collectCurrentToken(currentString)
 				if err != nil {
-					return []Token{}, err
+					return []Token{}, Construct{}, err
 				} else {
 					tokens = append(tokens, token)
 				}
@@ -77,15 +94,65 @@ func lex(input string) ([]Token, error) {
 	if len(currentString) > 0 {
 		token, err := collectCurrentToken(currentString[0 : len(currentString)-1])
 		if err != nil {
-			return []Token{}, err
+			return []Token{}, Construct{}, err
 		}
 		tokens = append(tokens, token)
 	}
 
-	return tokens, nil
+	return tokens, construct, nil
 }
 
-func collectComponents(tokens []Token) ([]Token, error) {
+func exponentiate(tokens []Token) ([]Token, error) {
+	rem_tokens := []Token{}
+
+	for i := 0; i < len(tokens); i++ {
+		remaining := len(tokens) - i
+
+		if remaining < 0 {
+			break
+		}
+
+		token := tokens[i]
+
+		if token.kind == OPERATOR {
+			operator := rune(token.value[0])
+			if i == 0 {
+				return nil, errors.New("Invalid expression - operator at beginning of expression")
+			}
+			if remaining == 0 {
+				return nil, errors.New("Invalid expression - operator at end of expression")
+			}
+
+			if tokens[i-1].kind == OPERATOR || tokens[i+1].kind == OPERATOR {
+				return nil, errors.New("Invalid expression - two operators in a row")
+			}
+
+			prevNum, err := strconv.Atoi(tokens[i-1].value)
+			if err != nil {
+				return nil, errors.New("Token before operator is not a number")
+			}
+
+			nextNum, err := strconv.Atoi(tokens[i+1].value)
+			if err != nil {
+				return nil, errors.New("Token after operator is not a number")
+			}
+
+			if operator == '^' {
+				rem_tokens = rem_tokens[0 : len(rem_tokens)-1]
+				rem_tokens = append(rem_tokens, Token{NUMBER, strconv.Itoa(int(math.Pow(float64(prevNum), float64(nextNum))))})
+				i++
+			} else {
+				rem_tokens = append(rem_tokens, token)
+			}
+		} else {
+			rem_tokens = append(rem_tokens, token)
+		}
+	}
+
+	return rem_tokens, nil
+}
+
+func mult(tokens []Token) ([]Token, error) {
 	rem_tokens := []Token{}
 
 	for i := 0; i < len(tokens); i++ {
@@ -148,12 +215,21 @@ func collectComponents(tokens []Token) ([]Token, error) {
 	return rem_tokens, nil
 }
 
-func parse(tokens []Token) (Expression, error) {
+func parse(tokens []Token, construct Construct) (Expression, error) {
 	expression := Expression{}
+	var err error
 
-	expression, err := collectComponents(tokens)
-	if err != nil {
-		return expression, err
+	if construct.exponentiation {
+		expression, err = exponentiate(tokens)
+		if err != nil {
+			return expression, err
+		}
+	}
+	if construct.multiplication {
+		expression, err = mult(expression)
+		if err != nil {
+			return expression, err
+		}
 	}
 
 	return expression, nil
@@ -206,13 +282,13 @@ func main() {
 
 	fmt.Print("Enter expression: ")
 	input, err := reader.ReadString('\n')
-	tokens, err := lex(input)
+	tokens, construct, err := lex(input)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		return
 	}
 
-	expression, err := parse(tokens)
+	expression, err := parse(tokens, construct)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		return
