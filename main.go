@@ -11,6 +11,8 @@ import (
 const (
 	NUMBER   = 0
 	OPERATOR = 1
+	LEFT_PAREN = 2
+	RIGHT_PAREN = 3
 )
 
 type Token struct {
@@ -60,6 +62,12 @@ func lex(input string) ([]Token, error) {
 					tokens = append(tokens, token)
 				}
 			}
+			currentString = []rune{}
+		case '(':
+			tokens = append(tokens, Token{LEFT_PAREN, string(input[i])})
+			currentString = []rune{}
+		case ')':
+			tokens = append(tokens, Token{RIGHT_PAREN, string(input[i])})
 			currentString = []rune{}
 		default:
 			currentString = append(currentString, rune(input[i]))
@@ -189,8 +197,9 @@ func evaluate(expression Expression) (int, error) {
 func main() {
 	var input string
 	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Enter expression: ")
 	input, err := reader.ReadString('\r')
-	fmt.Println(input)
 	tokens, err := lex(input)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
