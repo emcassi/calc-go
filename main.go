@@ -38,6 +38,7 @@ func collectCurrentToken(currentString []rune) (Token, error) {
 	s := string(currentString)
 	_, err := strconv.Atoi(s)
 	if err != nil {
+		fmt.Println("ERROR: ", err)
 		return Token{}, errors.New("Invalid token: " + s)
 	}
 	return Token{NUMBER, s}, nil
@@ -81,18 +82,34 @@ func lex(input string) ([]Token, Construct, error) {
 			}
 			currentString = []rune{}
 		case '(':
+			if len(currentString) > 0 {
+				token, err := collectCurrentToken(currentString)
+				if err != nil {
+					return []Token{}, Construct{}, err
+				}
+				tokens = append(tokens, token)
+			}
 			tokens = append(tokens, Token{LEFT_PAREN, string(input[i])})
 			currentString = []rune{}
 		case ')':
+			if len(currentString) > 0 {
+				token, err := collectCurrentToken(currentString)
+				if err != nil {
+					return []Token{}, Construct{}, err
+				}
+				tokens = append(tokens, token)
+			}
 			tokens = append(tokens, Token{RIGHT_PAREN, string(input[i])})
 			currentString = []rune{}
+		case '\n':
+			break
 		default:
 			currentString = append(currentString, rune(input[i]))
 		}
 	}
 
 	if len(currentString) > 0 {
-		token, err := collectCurrentToken(currentString[0 : len(currentString)-1])
+		token, err := collectCurrentToken(currentString)
 		if err != nil {
 			return []Token{}, Construct{}, err
 		}
@@ -100,6 +117,57 @@ func lex(input string) ([]Token, Construct, error) {
 	}
 
 	return tokens, construct, nil
+}
+
+func solveInnerEquations(tokens []Token) ([]Token, error) {
+
+	if len(tokens) == 1 {
+		return tokens, nil
+	}
+
+	left_paren_index := -1
+	right_paren_index := -1
+
+	construct := Construct{false, false, false}
+
+	for i, token := range tokens {
+		if token.kind == LEFT_PAREN {
+			left_paren_index = i
+		} else if token.kind == RIGHT_PAREN {
+			right_paren_index = i
+			break
+		} else {
+			if left_paren_index != -1 {
+				if token.value == "^" {
+					construct.exponentiation = true
+				} else if token.value == "*" || token.value == "/" {
+					construct.multiplication = true
+				} else if token.value == "+" || token.value == "-" {
+					construct.addition = true
+				}
+			}
+		}
+
+	}
+
+	if (left_paren_index == -1) != (right_paren_index == -1) {
+		return nil, errors.New("Invalid expression - mismatched parentheses")
+	} else if left_paren_index == -1 && right_paren_index == -1 {
+		return tokens, nil
+	} else {
+		inner_tokens := tokens[left_paren_index+1 : right_paren_index]
+		inner_result, err := evaluate(inner_tokens, construct)
+		if err != nil {
+			return nil, err
+		}
+
+		ntokens := append(tokens[0:left_paren_index], Token{NUMBER, strconv.Itoa(inner_result)})
+		if right_paren_index+1 < len(tokens) {
+			ntokens = append(ntokens, tokens[right_paren_index+1:]...)
+		}
+
+		return solveInnerEquations(ntokens)
+	}
 }
 
 func exponentiate(tokens []Token) ([]Token, error) {
@@ -216,28 +284,40 @@ func mult(tokens []Token) ([]Token, error) {
 }
 
 func parse(tokens []Token, construct Construct) (Expression, error) {
-	expression := Expression{}
-	var err error
-
-	if construct.exponentiation {
-		expression, err = exponentiate(tokens)
-		if err != nil {
-			return expression, err
-		}
-	}
-	if construct.multiplication {
-		expression, err = mult(expression)
-		if err != nil {
-			return expression, err
-		}
+	expression, err := solveInnerEquations(tokens)
+	if err != nil {
+		return nil, err
 	}
 
 	return expression, nil
 }
 
-func evaluate(expression Expression) (int, error) {
+func evaluate(expression Expression, construct Construct) (int, error) {
 
 	running_total := -1
+
+	if len(expression) == 1 {
+		return strconv.Atoi(expression[0].value)
+	}
+
+	var err error
+	
+	if construct.exponentiation {
+		expression, err = exponentiate(expression)
+		if err != nil {
+			fmt.Println("ERROR: ", err)
+			return -1, err
+		}
+	}
+
+
+	if construct.multiplication {
+		expression, err = mult(expression)
+		if err != nil {
+			fmt.Println("ERROR: ", err)
+			return -1, err
+		}
+	}
 
 	if len(expression) == 1 {
 		return strconv.Atoi(expression[0].value)
@@ -272,7 +352,6 @@ func evaluate(expression Expression) (int, error) {
 			}
 		}
 	}
-
 	return running_total, nil
 }
 
@@ -294,7 +373,7 @@ func main() {
 		return
 	}
 
-	result, err := evaluate(expression)
+	result, err := evaluate(expression, construct)
 	if err != nil {
 		fmt.Printf("ERROR: %s\n", err)
 		return
